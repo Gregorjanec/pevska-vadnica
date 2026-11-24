@@ -179,7 +179,7 @@ ali v obliki [G]Prva [Em]vrstica"></textarea>
       <summary>Nastavitve</summary>
       <div class="setrow">
         <label>Zapis tonov <select id="setNot"><option value="int">mednarodni (B = si)</option><option value="sl">slovenski (H = si, B = b)</option></select></label>
-        <label>Občutljivost mikrofona <select id="setGate"><option value="0.03">nizka (hrupen prostor)</option><option value="0.012">srednja</option><option value="0.005">visoka (tih glas)</option></select></label>
+        <label>Občutljivost mikrofona <select id="setGate"><option value="0.02">nizka (hrupen prostor)</option><option value="0.007">srednja</option><option value="0.003">visoka (tih glas)</option></select></label>
         <label>Toleranca "čisto" ± <select id="setTol"><option>10</option><option>15</option><option>20</option><option>25</option><option>30</option></select> centov</label>
       </div>
     </details>
@@ -207,7 +207,8 @@ const store={get(k,d){try{const v=localStorage.getItem('pv_'+k);return v==null?d
 const mod12=n=>((n%12)+12)%12;
 
 /* ---------- note names ---------- */
-let settings=Object.assign({notation:'int',tol:20,gate:0.012},store.get('settings',{}));
+let settings=Object.assign({notation:'int',tol:20,gate:0.007},store.get('settings',{}));
+if(![0.02,0.007,0.003].includes(settings.gate))settings.gate=0.007;
 const SHARP=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],FLAT=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
 const FLAT_MAJ=new Set([5,10,3,8,1,6]),FLAT_MIN=new Set([2,7,0,5,10,3]);
 function pcName(pc,flat){let n=(flat?FLAT:SHARP)[mod12(pc)];if(settings.notation==='sl'){if(n==='B')n='H';else if(n==='Bb'||n==='A#')n='B'}return n}
@@ -334,7 +335,7 @@ const step=d=>{if(!flat.length)return;active=active<0?0:Math.max(0,Math.min(flat
 const nsdf=new Float32Array(2048);
 function detect(x,sr){
   const N=x.length;let e=0;for(let i=0;i<N;i++)e+=x[i]*x[i];
-  if(Math.sqrt(e/N)<settings.gate)return null;
+  level=Math.sqrt(e/N);if(level<settings.gate)return null;
   const maxT=Math.min(Math.floor(sr/65),N>>1),minT=Math.floor(sr/1100);let mm=2*e;
   for(let t=0;t<maxT;t++){if(t>0)mm-=x[t-1]*x[t-1]+x[N-t]*x[N-t];let a=0;for(let i=0,L=N-t;i<L;i++)a+=x[i]*x[i+t];nsdf[t]=mm>0?2*a/mm:0}
   let t=1;while(t<maxT&&nsdf[t]>0)t++;
@@ -349,7 +350,7 @@ function detect(x,sr){
 /* ---------- live state ---------- */
 const COL={ch:'#2fbf71',key:'#4aa3ff',out:'#ff9f1c'},FITTXT={ch:'V akordu',key:'V tonaliteti',out:'Izven tonalitete'};
 const WIN=10000;let trace=[],recent=[],lastHit=0,stab={n:null,t:0},viewC=57;
-let ac=null,an=null,stream=null,buf=null,running=false,raf=0,lastDet=0;
+let ac=null,an=null,stream=null,buf=null,running=false,raf=0,lastDet=0,level=0;
 let st={n:0,tune:0,key:0,chN:0,ch:0,lo:null,hi:null};
 let rng={on:false,lo:null,hi:null},saved=store.get('range',null);
 const fitOf=pc=>{const c=chordPcsNow();return c&&c.includes(pc)?'ch':keyPcsNow().includes(pc)?'key':'out'};
@@ -358,7 +359,8 @@ function setChip(el,txt,bg,fg){el.textContent=txt;el.style.background=bg;el.styl
 function idle(){$('noteEl').classList.add('idle');$('needleDot').style.opacity=0;
   setChip($('intChip'),'Intonacija','var(--stage2)','#d9c9de');setChip($('fitChip'),'Ujemanje','var(--stage2)','#d9c9de')}
 function onPitch(r,now){
-  if(!r){if(now-lastHit>300){recent=[];idle();$('centsEl').textContent=running?'Poslušam …':'Pritisni mikrofon in zapoj'}return}
+  if(!r){if(now-lastHit>300){recent=[];idle();
+    $('centsEl').textContent=running?(ac&&ac.state!=='running'?'Zvok je ustavljen – tapni zaslon':`Poslušam … signal ${Math.min(100,Math.round(level/settings.gate*50))} %`+(level<settings.gate?' (pretiho)':'')):'Pritisni mikrofon in zapoj'}return}
   const m=69+12*Math.log2(r.f/440);if(m<36||m>86)return;
   lastHit=now;recent.push(m);if(recent.length>5)recent.shift();
   const med=[...recent].sort((a,b)=>a-b)[recent.length>>1],near=Math.round(med),cents=Math.round((med-near)*100),pc=mod12(near),fit=fitOf(pc),kf=keyFlat();
@@ -384,10 +386,14 @@ function loop(ts){
 async function startMic(){
   const msg=$('msg');msg.hidden=true;
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){msg.textContent='Ta brskalnik tukaj ne dovoli mikrofona. Odpri app prek https povezave ali neposredno v Chromu na računalniku.';msg.hidden=false;return}
+  /* iPhone: zvok mora biti zagnan takoj ob tapu, preden čakamo na dovoljenje */
+  try{ac=new(window.AudioContext||window.webkitAudioContext)();if(ac.resume)ac.resume()}catch(e){}
   try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
-  catch(e){msg.textContent=e&&e.name==='NotAllowedError'?'Dostop do mikrofona je zavrnjen. Dovoli ga v nastavitvah brskalnika za to stran in poskusi znova.':'Mikrofona ni bilo mogoče vklopiti ('+(e&&e.name||'napaka')+').';msg.hidden=false;return}
-  ac=new(window.AudioContext||window.webkitAudioContext)();if(ac.resume)await ac.resume();
+  catch(e){if(ac)ac.close();ac=null;msg.textContent=e&&e.name==='NotAllowedError'?'Dostop do mikrofona je zavrnjen. Na iPhonu: Nastavitve → Safari → Mikrofon → Dovoli, nato znova odpri app.':'Mikrofona ni bilo mogoče vklopiti ('+(e&&e.name||'napaka')+').';msg.hidden=false;return}
+  if(ac&&ac.state==='suspended'){try{await ac.resume()}catch(e){}}
   an=ac.createAnalyser();an.fftSize=2048;ac.createMediaStreamSource(stream).connect(an);buf=new Float32Array(an.fftSize);
+  /* iOS včasih ustavi zvok ob preklopu aplikacij – ob tapu kjerkoli ga znova zbudimo */
+  document.addEventListener('touchend',()=>{if(ac&&ac.state!=='running')ac.resume()},{passive:true});
   running=true;$('micBtn').setAttribute('aria-pressed','true');$('micBtn').setAttribute('aria-label','Izklopi mikrofon');$('centsEl').textContent='Poslušam …';
   raf=requestAnimationFrame(loop);
 }
