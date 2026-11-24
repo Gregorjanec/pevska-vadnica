@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pevska vadnica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: vadnica za petje – mirna, delovna, brez okraskov
+   IDEA: uglaševalec na odru + pesmarica na notnem stojalu
+   PICTURE: živ graf višine tona (piano-roll) s pobarvanimi toni akorda
+   COLOUR/TYPE: temno vijolični oder, bel list, koralni akordi; Familjen Grotesk + IBM Plex Mono
+   LAYOUT: lepljiv oder zgoraj, pesem spodaj, plošče z nastavitvami na dnu */
+:root{color-scheme:light dark;
+--bg:light-dark(#faf7fb,#151017);--card:light-dark(#fff,#1f1823);--ink:light-dark(#1d1420,#f3ecf5);
+--mute:light-dark(#6d5f72,#ab9db0);--line:light-dark(#e6dde9,#342a38);
+--stage:#2a1530;--stage2:#3b2244;--sink:#f7eefa;--acc:light-dark(#e2502f,#ff7a5c);
+--ch:#2fbf71;--key:#4aa3ff;--out:#ff9f1c;--bad:#ff4d6d;--stageH:280px}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Familjen Grotesk",system-ui,sans-serif;overflow-x:clip}
+button,select,input,textarea{font:inherit;color:inherit}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.btn{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer;white-space:nowrap}
+.btn:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,.ch:focus-visible,.mic:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.btn.ghost{background:transparent}.btn.sq{width:44px;padding:0;font-size:22px;line-height:1}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+select{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);padding:0 10px;font-size:16px}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px max(4vw,14px);background:var(--stage);color:var(--sink)}
+.brand{font-weight:700;font-size:20px;letter-spacing:-.01em}
+.songbar{display:flex;gap:8px;flex:1 1 260px;justify-content:flex-end}
+.songbar select{flex:1;max-width:340px;background:var(--stage2);border-color:#56365f;color:var(--sink)}
+.top .btn{background:transparent;border-color:#56365f;color:var(--sink)}
+.stage{position:sticky;top:0;z-index:5;background:var(--stage);color:var(--sink);padding:4px max(4vw,14px) 12px;box-shadow:0 8px 24px rgba(20,5,25,.25)}
+.srow{display:flex;align-items:center;gap:14px}
+.mic{flex:none;width:60px;height:60px;border-radius:50%;border:0;background:var(--stage2);color:var(--sink);cursor:pointer;display:grid;place-items:center;transition:background .2s}
+.mic[aria-pressed=true]{background:var(--acc);box-shadow:0 0 0 6px rgba(255,122,92,.25)}
+.readout{flex:1}
+.note{font:600 clamp(34px,8vw,48px)/1 "IBM Plex Mono",monospace;letter-spacing:-.03em}
+.note.idle{opacity:.35}
+.cents{font-size:14px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chips{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.chip{font-size:13px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--stage2);white-space:nowrap;color:#d9c9de}
+.needle{position:relative;height:14px;margin:10px 0 8px;border-radius:7px;background:linear-gradient(90deg,var(--bad) 0 10%,var(--out) 10% 30%,var(--ch) 30% 70%,var(--out) 70% 90%,var(--bad) 90%);opacity:.9}
+.needle .z{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:var(--sink)}
+.needle b{position:absolute;top:50%;left:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:var(--sink);border:3px solid var(--stage);transition:left .08s linear;opacity:0}
+.trace{position:relative;height:120px;border-radius:10px;background:#1c0d21;overflow:hidden}
+.trace canvas{position:absolute;inset:0;width:100%;height:100%}
+.stage.nograph .trace{display:none}
+.crow2{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.crow2 .btn{background:var(--stage2);border-color:#56365f;color:var(--sink)}
+.cur{flex:1;min-width:90px;text-align:center;font-size:15px}.cur strong{font:600 22px "IBM Plex Mono",monospace;margin-left:4px}
+.lbl{opacity:.7}
+.msg{margin-top:10px;padding:10px 12px;border-radius:10px;background:#5a1f2c;font-size:15px}
+.wrap{max-width:900px;margin:0 auto;padding:20px max(4vw,14px) 60px}
+h1{font-size:clamp(26px,5vw,36px);line-height:1.08;margin:0 0 12px;text-wrap:balance}
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tools label{display:flex;gap:8px;align-items:center;font-size:15px;color:var(--mute)}
+.grp{display:flex;gap:6px;align-items:center;font-size:15px;color:var(--mute)}
+output{min-width:30px;text-align:center;font:600 17px "IBM Plex Mono",monospace;color:var(--ink)}
+input[type=range]{accent-color:var(--acc);width:110px}
+.hint{color:var(--mute);font-size:15px;margin:12px 0 4px}
+.sheet{margin-top:14px;padding:18px clamp(12px,3vw,26px);background:var(--card);border:1px solid var(--line);border-radius:14px;font:15px/1.35 "IBM Plex Mono",monospace;overflow-x:auto}
+.pair{margin:0 0 10px;white-space:pre}
+.crow{min-height:1.5em;color:var(--acc);font-weight:600}
+.lrow{min-height:1.35em}
+.ch{all:unset;cursor:pointer;color:var(--acc);font-weight:600;border-radius:5px;scroll-margin-top:calc(var(--stageH) + 24px);scroll-margin-bottom:40vh}
+.ch:hover{text-decoration:underline}
+.ch.on{background:var(--ch);color:#fff;box-shadow:0 0 0 3px var(--ch)}
+.sec{font:600 14px "Familjen Grotesk",sans-serif;color:var(--mute);margin:16px 0 6px}
+.gap{height:8px}.empty{font-family:"Familjen Grotesk",sans-serif;color:var(--mute)}
+.editor label{display:block;font-weight:600;margin:14px 0 6px}
+.editor input[type=text],.editor textarea{width:100%;font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px 12px}
+.editor textarea{min-height:46vh;font-family:"IBM Plex Mono",monospace;font-size:15px;line-height:1.4;white-space:pre;overflow-x:auto}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.panels{margin-top:28px;display:grid;gap:12px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.panel h2,.panel summary{font-size:18px;font-weight:700;margin:0}
+.panel summary{cursor:pointer;min-height:28px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:12px;margin-top:12px}
+.stat b{display:block;font:600 26px "IBM Plex Mono",monospace}
+.stat span{font-size:14px;color:var(--mute)}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden}.bar i{display:block;height:100%;width:0}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:14px;color:var(--mute);margin-top:12px}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.panel p,.panel li{font-size:15px;color:var(--mute)}.panel li{margin:6px 0}
+.big{font:600 24px "IBM Plex Mono",monospace;color:var(--ink)}
+.setrow{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin-top:12px;font-size:15px}
+@media(max-width:600px){.crow2{flex-wrap:nowrap;gap:6px}.crow2 .lbl{display:none}.crow2 .btn:not(.sq){padding:0 10px}.cur{min-width:56px}.sheet{font-size:13.5px}.trace{height:96px}.mic{width:52px;height:52px}.chip{font-size:12px;padding:3px 8px}.brand{font-size:18px}}
+@media(prefers-reduced-motion:reduce){.needle b,.mic{transition:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Pevska vadnica</div>
+  <div class="songbar">
+    <label class="sr" for="songSel">Pesem</label>
+    <select id="songSel"></select>
+    <button class="btn" id="newBtn">+ Nova</button>
+  </div>
+</header>
+
+<section class="stage" id="stage" aria-label="Uglaševalec glasu">
+  <div class="srow">
+    <button class="mic" id="micBtn" aria-pressed="false" aria-label="Vklopi mikrofon">
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12z"/></svg>
+    </button>
+    <div class="readout">
+      <div class="note idle" id="noteEl">—</div>
+      <div class="cents" id="centsEl">Pritisni mikrofon in zapoj</div>
+    </div>
+    <div class="chips">
+      <span class="chip" id="intChip">Intonacija</span>
+      <span class="chip" id="fitChip">Ujemanje</span>
+    </div>
+  </div>
+  <div class="needle" aria-hidden="true"><i class="z"></i><b id="needleDot"></b></div>
+  <div class="trace"><canvas id="cv" aria-label="Graf višine tona zadnjih 10 sekund"></canvas></div>
+  <div class="crow2">
+    <button class="btn sq" id="prevCh" aria-label="Prejšnji akord">‹</button>
+    <div class="cur"><span class="lbl">Akord</span><strong id="curCh">—</strong></div>
+    <button class="btn sq" id="nextCh" aria-label="Naslednji akord">›</button>
+    <button class="btn" id="playCh">Zaigraj ton</button>
+    <button class="btn" id="graphBtn" aria-pressed="true">Graf</button>
+  </div>
+  <div class="msg" id="msg" hidden></div>
+</section>
+
+<main class="wrap">
+  <section id="songView">
+    <h1 id="songTitle"></h1>
+    <div class="tools">
+      <label>Tonaliteta <select id="keySel"></select></label>
+      <div class="grp">Transpozicija <button class="btn sq" id="trDown" aria-label="Pol tona nižje">−</button><output id="trOut">0</output><button class="btn sq" id="trUp" aria-label="Pol tona višje">+</button></div>
+      <div class="grp"><button class="btn" id="scrollBtn">Pomikanje ▶</button><input type="range" id="speed" min="1" max="10" value="3" aria-label="Hitrost pomikanja"></div>
+      <button class="btn ghost" id="editBtn">Uredi</button>
+      <button class="btn ghost" id="delBtn">Izbriši</button>
+    </div>
+    <p class="hint">Ko posnetek zamenja akord, tapni ta akord v besedilu (ali ›). Tako app ve, kateri toni zdaj sodijo zraven.</p>
+    <div class="sheet" id="sheet"></div>
+  </section>
+
+  <section id="editor" class="editor" hidden>
+    <h1 id="edHead">Nova pesem</h1>
+    <label for="edTitle">Naslov</label>
+    <input type="text" id="edTitle" placeholder="npr. Perfect – Ed Sheeran">
+    <label for="edText">Akordi in besedilo</label>
+    <textarea id="edText" spellcheck="false" placeholder="Prilepi iz Ultimate Guitar – akordi nad besedilom:
+
+G            Em
+Prva vrstica besedila
+C            D
+Druga vrstica
+
+ali v obliki [G]Prva [Em]vrstica"></textarea>
+    <div class="row"><button class="btn pri" id="edSave">Shrani</button><button class="btn" id="edCancel">Prekliči</button></div>
+  </section>
+
+  <div class="panels">
+    <section class="panel" aria-labelledby="stH">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 id="stH">Ta vaja</h2><button class="btn ghost" id="resetSt">Ponastavi</button></div>
+      <div class="stats" id="stats"></div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--ch)"></i>V akordu</span>
+        <span><i class="dot" style="background:var(--key)"></i>V tonaliteti</span>
+        <span><i class="dot" style="background:var(--out)"></i>Izven tonalitete</span>
+      </div>
+    </section>
+
+    <details class="panel" id="rangePanel">
+      <summary>Moj obseg</summary>
+      <p>Vklopi merjenje, potem zapoj čim nižji ton, ki ga še čisto držiš, in nato čim višji brez kričanja. Šteje samo ton, ki ga držiš vsaj pol sekunde.</p>
+      <div class="setrow"><span>Shranjeno: <span class="big" id="rSaved">—</span></span><span id="rType"></span></div>
+      <div class="setrow"><span>Zdaj izmerjeno: <span class="big" id="rLive">—</span></span></div>
+      <div class="row"><button class="btn" id="rToggle">Začni merjenje</button><button class="btn pri" id="rSave" disabled>Shrani obseg</button></div>
+    </details>
+
+    <details class="panel">
+      <summary>Nastavitve</summary>
+      <div class="setrow">
+        <label>Zapis tonov <select id="setNot"><option value="int">mednarodni (B = si)</option><option value="sl">slovenski (H = si, B = b)</option></select></label>
+        <label>Občutljivost mikrofona <select id="setGate"><option value="0.03">nizka (hrupen prostor)</option><option value="0.012">srednja</option><option value="0.005">visoka (tih glas)</option></select></label>
+        <label>Toleranca "čisto" ± <select id="setTol"><option>10</option><option>15</option><option>20</option><option>25</option><option>30</option></select> centov</label>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>Kako uporabljati</summary>
+      <ul>
+        <li><b>Slušalke:</b> najbolje žične. Bluetooth slušalke ob vklopu mikrofona pogosto preklopijo v klicni način (slabši zvok) in začnejo uporabljati svoj mikrofon.</li>
+        <li><b>Posnetek</b> predvajaj v Spotifyju ali YouTubu. Če se predvajanje ob vklopu mikrofona ustavi (zgodi se na iPhonu), ga predvajaj z druge naprave.</li>
+        <li><b>Pesem dodaš</b> z gumbom + Nova: na Ultimate Guitar odpri pesem, kopiraj akorde z besedilom in jih prilepi. Razume akorde nad besedilom in obliko [G]besedilo.</li>
+        <li><b>Transpozicija:</b> če poješ z originalnim posnetkom, pusti 0. Spremeni jo, ko igraš sam na kitari v drugi tonaliteti.</li>
+        <li><b>Barve:</b> zelena pomeni, da tvoj ton spada v trenutni akord (skoraj zagotovo pravilno), modra, da je v tonaliteti pesmi (verjetno v redu), oranžna, da je izven nje (verjetno zgrešeno). Melodija včasih namenoma gre čez akord, zato je to vodilo, ne sodba.</li>
+        <li><b>Intonacija</b> pove, koliko si od najbližjega tona: 100 centov je pol tona.</li>
+        <li>Na računalniku: puščici ← → menjata akord.</li>
+      </ul>
+    </details>
+  </div>
+</main>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store={get(k,d){try{const v=localStorage.getItem('pv_'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('pv_'+k,JSON.stringify(v))}catch(e){}}};
+const mod12=n=>((n%12)+12)%12;
+
+/* ---------- note names ---------- */
+let settings=Object.assign({notation:'int',tol:20,gate:0.012},store.get('settings',{}));
+const SHARP=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],FLAT=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const FLAT_MAJ=new Set([5,10,3,8,1,6]),FLAT_MIN=new Set([2,7,0,5,10,3]);
+function pcName(pc,flat){let n=(flat?FLAT:SHARP)[mod12(pc)];if(settings.notation==='sl'){if(n==='B')n='H';else if(n==='Bb'||n==='A#')n='B'}return n}
+const noteName=(m,flat)=>pcName(m,flat)+(Math.floor(m/12)-1);
+const BASE={C:0,D:2,E:4,F:5,G:7,A:9,B:11,H:11};
+function letterPc(L,acc){const slB=settings.notation==='sl'&&L==='B';let p=slB?10:BASE[L];if(acc==='#')p++;else if(acc==='b'&&!slB)p--;return mod12(p)}
+
+/* ---------- chords ---------- */
+const CH=/^([A-H])(#|b)?([^\/]*)(?:\/([A-H])(#|b)?)?$/;
+const QOK=/^(?:maj|min|dim|aug|sus|add|m|M|\+|-|o|ø|°|Δ|\d|\(|\)|b|#)*$/;
+function chordInfo(tok){
+  const m=tok.match(CH);if(!m)return null;const q=m[3]||'';if(!QOK.test(q))return null;
+  const root=letterPc(m[1],m[2]),minor=/^(m(?!aj)|min|-)/.test(q),half=/ø|m7b5/.test(q);let t;
+  if(half)t=[0,3,6,10];else if(/dim|o|°/.test(q))t=[0,3,6];else if(/aug|\+/.test(q))t=[0,4,8];
+  else if(/sus2/.test(q))t=[0,2,7];else if(/sus/.test(q))t=[0,5,7];else if(q==='5')t=[0,7];else t=minor?[0,3,7]:[0,4,7];
+  if(!half){if(/maj7|M7|maj9|Δ/.test(q))t.push(11);else if(/(dim|o|°)7/.test(q))t.push(9);else if(/7|9|11|13/.test(q)&&!/add/.test(q))t.push(10)}
+  if(/6/.test(q))t.push(9);if(/9/.test(q))t.push(2);if(/11/.test(q))t.push(5);if(/13/.test(q))t.push(9);
+  const pcs=[...new Set(t.map(i=>mod12(root+i)))];let bass=null;
+  if(m[4]){bass=letterPc(m[4],m[5]);if(!pcs.includes(bass))pcs.push(bass)}
+  return{root,pcs,q,bass,minor,flat:m[2]==='b'||(m[5]==='b')};
+}
+const SKIP=/^(\|+|x\d+|\(x\d+\)|-+|\/|%|\.+|N\.?C\.?)$/i;
+function isChordLine(L){const t=L.trim().split(/\s+/).filter(x=>x&&!SKIP.test(x));return t.length>0&&t.every(x=>chordInfo(x.replace(/[()]/g,'')))}
+function chordsOf(L){const out=[];for(const m of L.matchAll(/\S+/g)){const tok=m[0].replace(/[()]/g,'');const info=SKIP.test(m[0])?null:chordInfo(tok);if(info)out.push({col:m.index,info})}return out}
+function fromChordPro(L){let lyr='',ch='',last=0;for(const m of L.matchAll(/\[([^\]]+)\]/g)){lyr+=L.slice(last,m.index);last=m.index+m[0].length;
+  if(!chordInfo(m[1])){lyr+=m[1];continue}const pos=Math.max(lyr.length,ch.length?ch.length+1:0);lyr=lyr.padEnd(pos);ch=ch.padEnd(pos)+m[1]}
+  return{ch,lyr:lyr+L.slice(last)}}
+function parseSong(text){
+  const lines=text.replace(/\r/g,'').replace(/\t/g,'    ').split('\n'),items=[];
+  const isHead=L=>{const h=L.trim().match(/^\[([^\]]+)\]$/);return h&&!chordInfo(h[1])?h[1]:(/^[^\[\]]{1,24}:$/.test(L.trim())&&!isChordLine(L)?L.trim().slice(0,-1):null)};
+  for(let i=0;i<lines.length;i++){
+    const L=lines[i].replace(/\s+$/,'');
+    if(!L.trim()){items.push({t:'blank'});continue}
+    const h=isHead(L);if(h){items.push({t:'head',text:h});continue}
+    if(isChordLine(L)){const nx=lines[i+1];
+      if(nx!=null&&nx.trim()&&!isChordLine(nx)&&!isHead(nx)&&!/\[[^\]]+\]/.test(nx)){items.push({t:'pair',ch:chordsOf(L),lyr:nx.replace(/\s+$/,'')});i++}
+      else items.push({t:'pair',ch:chordsOf(L),lyr:null});continue}
+    if([...L.matchAll(/\[([^\]]+)\]/g)].some(m=>chordInfo(m[1]))){const r=fromChordPro(L);items.push({t:'pair',ch:chordsOf(r.ch),lyr:r.lyr});continue}
+    items.push({t:'text',lyr:L});
+  }
+  return items;
+}
+const MAJ=[0,2,4,5,7,9,11];
+function detectKey(infos){
+  if(!infos.length)return{pc:7,minor:false};let best=null;const f=infos[0],l=infos[infos.length-1];
+  for(let k=0;k<12;k++){const sc=new Set(MAJ.map(i=>(k+i)%12));let s=0;
+    for(const c of infos){s+=c.pcs.filter(p=>sc.has(p)).length/c.pcs.length;if(c.root===k&&!c.minor)s+=.4}
+    const tonicOf=c=>c.minor?mod12(c.root+3):c.root;
+    if(tonicOf(f)===k)s+=1.5;if(tonicOf(l)===k)s+=1.5;if(!best||s>best.s)best={s,k}}
+  const rel=(best.k+9)%12,minor=(f.minor&&f.root===rel)||(l.minor&&l.root===rel&&f.root!==best.k);
+  return minor?{pc:rel,minor:true}:{pc:best.k,minor:false};
+}
+const scalePcs=k=>{const t=k.minor?mod12(k.pc+3):k.pc;const s=MAJ.map(i=>mod12(t+i));if(k.minor)s.push(mod12(k.pc+11));return s};
+const keyLabel=(k,flat)=>{const n=pcName(k.pc,flat);return k.minor?n.toLowerCase()+'-mol':n+'-dur'};
+
+/* ---------- songs ---------- */
+const SAMPLE={id:'primer',title:'Amazing Grace (primer, javna domena)',key:'auto',tr:0,text:`[Kitica 1]
+G          G7       C       G
+Amazing grace, how sweet the sound
+G               D
+That saved a wretch like me
+G           G7      C       G
+I once was lost, but now am found
+G      Em       D       G
+Was blind, but now I see
+
+[Kitica 2]
+G             G7            C        G
+'Twas grace that taught my heart to fear
+G               D
+And grace my fears relieved
+G            G7           C         G
+How precious did that grace appear
+G         Em     D     G
+The hour I first believed`};
+let songs=store.get('songs',null);if(!Array.isArray(songs)||!songs.length)songs=[SAMPLE];
+let song=songs.find(s=>s.id===store.get('cur',''))||songs[0];
+let items=[],flat=[],detected={pc:7,minor:false},active=-1;
+const saveSongs=()=>{store.set('songs',songs);store.set('cur',song.id)};
+const curKey=()=>{if(song.key&&song.key!=='auto'){const[p,mi]=song.key.split(':');return{pc:+p,minor:mi==='1'}}return detected};
+const tr=()=>song.tr||0;
+const keyFlat=()=>{const k=curKey();return(k.minor?FLAT_MIN:FLAT_MAJ).has(mod12(k.pc+tr()))};
+const chordName=(c,kf)=>{const f=c.flat||kf;return pcName(c.root+tr(),f)+c.q+(c.bass!=null?'/'+pcName(c.bass+tr(),f):'')};
+const chordPcsNow=()=>active>=0&&flat[active]?flat[active].pcs.map(p=>mod12(p+tr())):null;
+const keyPcsNow=()=>scalePcs(curKey()).map(p=>mod12(p+tr()));
+
+function loadSong(){
+  items=parseSong(song.text||'');
+  detected=detectKey(items.flatMap(it=>it.t==='pair'?it.ch.map(c=>c.info):[]));
+  active=-1;fillSongSel();fillKeySel();render();
+}
+function fillSongSel(){$('songSel').innerHTML=songs.map(s=>`<option value="${esc(s.id)}"${s===song?' selected':''}>${esc(s.title)}</option>`).join('')}
+function fillKeySel(){
+  const opts=[`<option value="auto">Samodejno (${esc(keyLabel(detected,(detected.minor?FLAT_MIN:FLAT_MAJ).has(detected.pc)))})</option>`];
+  for(const mi of[0,1])for(let p=0;p<12;p++){const k={pc:p,minor:!!mi};opts.push(`<option value="${p}:${mi}">${esc(keyLabel(k,(mi?FLAT_MIN:FLAT_MAJ).has(p)))}</option>`)}
+  $('keySel').innerHTML=opts.join('');$('keySel').value=song.key||'auto';
+}
+function render(){
+  $('songTitle').textContent=song.title;
+  const t=tr();$('trOut').textContent=(t>0?'+':'')+t;
+  flat=[];const kf=keyFlat();
+  const html=items.map(it=>{
+    if(it.t==='blank')return'<div class="gap"></div>';
+    if(it.t==='head')return`<h3 class="sec">${esc(it.text)}</h3>`;
+    if(it.t==='text')return`<div class="pair"><div class="lrow">${esc(it.lyr)}</div></div>`;
+    let row='',cur=0;
+    for(const c of it.ch){const name=chordName(c.info,kf),pos=Math.max(c.col,cur?cur+1:0);
+      row+=' '.repeat(pos-cur)+`<button class="ch" data-i="${flat.length}">${esc(name)}</button>`;cur=pos+name.length;flat.push(c.info)}
+    return`<div class="pair"><div class="crow">${row}</div>${it.lyr!=null?`<div class="lrow">${esc(it.lyr)}</div>`:''}</div>`;
+  }).join('');
+  $('sheet').innerHTML=html||'<p class="empty">Pesem je prazna. Pritisni Uredi in prilepi akorde z besedilom.</p>';
+  if(active>=flat.length)active=-1;markActive(false);
+}
+function markActive(scroll){
+  for(const b of document.querySelectorAll('.ch.on'))b.classList.remove('on');
+  const el=active>=0?document.querySelector(`.ch[data-i="${active}"]`):null;
+  if(el){el.classList.add('on');if(scroll)el.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}
+  $('curCh').textContent=active>=0?chordName(flat[active],keyFlat()):'—';
+  if(!running)draw();
+}
+const step=d=>{if(!flat.length)return;active=active<0?0:Math.max(0,Math.min(flat.length-1,active+d));markActive(true)};
+
+/* ---------- pitch detection (McLeod / NSDF) ---------- */
+const nsdf=new Float32Array(2048);
+function detect(x,sr){
+  const N=x.length;let e=0;for(let i=0;i<N;i++)e+=x[i]*x[i];
+  if(Math.sqrt(e/N)<settings.gate)return null;
+  const maxT=Math.min(Math.floor(sr/65),N>>1),minT=Math.floor(sr/1100);let mm=2*e;
+  for(let t=0;t<maxT;t++){if(t>0)mm-=x[t-1]*x[t-1]+x[N-t]*x[N-t];let a=0;for(let i=0,L=N-t;i<L;i++)a+=x[i]*x[i+t];nsdf[t]=mm>0?2*a/mm:0}
+  let t=1;while(t<maxT&&nsdf[t]>0)t++;
+  const peaks=[];let g=0;
+  while(t<maxT){while(t<maxT&&nsdf[t]<=0)t++;let bi=-1,bv=-1;while(t<maxT&&nsdf[t]>0){if(nsdf[t]>bv){bv=nsdf[t];bi=t}t++}
+    if(bi>=minT&&bi<maxT-1){peaks.push(bi);if(bv>g)g=bv}}
+  if(!peaks.length||g<.75)return null;
+  const p=peaks.find(i=>nsdf[i]>=.9*g),a=nsdf[p-1],b=nsdf[p],c=nsdf[p+1],den=a-2*b+c;
+  return{f:sr/(p+(den?.5*(a-c)/den:0)),clarity:b};
+}
+
+/* ---------- live state ---------- */
+const COL={ch:'#2fbf71',key:'#4aa3ff',out:'#ff9f1c'},FITTXT={ch:'V akordu',key:'V tonaliteti',out:'Izven tonalitete'};
+const WIN=10000;let trace=[],recent=[],lastHit=0,stab={n:null,t:0},viewC=57;
+let ac=null,an=null,stream=null,buf=null,running=false,raf=0,lastDet=0;
+let st={n:0,tune:0,key:0,chN:0,ch:0,lo:null,hi:null};
+let rng={on:false,lo:null,hi:null},saved=store.get('range',null);
+const fitOf=pc=>{const c=chordPcsNow();return c&&c.includes(pc)?'ch':keyPcsNow().includes(pc)?'key':'out'};
+
+function setChip(el,txt,bg,fg){el.textContent=txt;el.style.background=bg;el.style.color=fg||'#fff'}
+function idle(){$('noteEl').classList.add('idle');$('needleDot').style.opacity=0;
+  setChip($('intChip'),'Intonacija','var(--stage2)','#d9c9de');setChip($('fitChip'),'Ujemanje','var(--stage2)','#d9c9de')}
+function onPitch(r,now){
+  if(!r){if(now-lastHit>300){recent=[];idle();$('centsEl').textContent=running?'Poslušam …':'Pritisni mikrofon in zapoj'}return}
+  const m=69+12*Math.log2(r.f/440);if(m<36||m>86)return;
+  lastHit=now;recent.push(m);if(recent.length>5)recent.shift();
+  const med=[...recent].sort((a,b)=>a-b)[recent.length>>1],near=Math.round(med),cents=Math.round((med-near)*100),pc=mod12(near),fit=fitOf(pc),kf=keyFlat();
+  trace.push({t:now,m:med,fit});
+  const n=$('noteEl');n.textContent=noteName(near,kf);n.classList.remove('idle');
+  $('centsEl').textContent=`${cents>0?'+':''}${cents} centov · ${r.f.toFixed(1)} Hz`;
+  const ac2=Math.abs(cents),tol=settings.tol;
+  const dot=$('needleDot');dot.style.opacity=1;dot.style.left=(50+Math.max(-50,Math.min(50,cents)))+'%';
+  if(ac2<=tol)setChip($('intChip'),'Čisto','var(--ch)');
+  else setChip($('intChip'),(ac2<=35?'Malo p':'P')+(cents<0?'renizko':'revisoko'),ac2<=35?'var(--out)':'var(--bad)',ac2<=35?'#2a1530':'#fff');
+  setChip($('fitChip'),FITTXT[fit],COL[fit],fit==='out'?'#2a1530':'#fff');
+  if(stab.n!==near)stab={n:near,t:now};const held=now-stab.t;
+  st.n++;if(ac2<=tol)st.tune++;if(fit!=='out')st.key++;if(chordPcsNow()){st.chN++;if(fit==='ch')st.ch++}
+  if(held>300){st.lo=st.lo==null?near:Math.min(st.lo,near);st.hi=st.hi==null?near:Math.max(st.hi,near)}
+  if(rng.on&&held>500&&ac2<40){rng.lo=rng.lo==null?near:Math.min(rng.lo,near);rng.hi=rng.hi==null?near:Math.max(rng.hi,near);showRange()}
+  if(st.n%10===0)showStats();
+}
+function loop(ts){
+  if(!running)return;raf=requestAnimationFrame(loop);
+  if(ts-lastDet>=33){lastDet=ts;an.getFloatTimeDomainData(buf);onPitch(detect(buf,ac.sampleRate),performance.now())}
+  draw();
+}
+async function startMic(){
+  const msg=$('msg');msg.hidden=true;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){msg.textContent='Ta brskalnik tukaj ne dovoli mikrofona. Odpri app prek https povezave ali neposredno v Chromu na računalniku.';msg.hidden=false;return}
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
+  catch(e){msg.textContent=e&&e.name==='NotAllowedError'?'Dostop do mikrofona je zavrnjen. Dovoli ga v nastavitvah brskalnika za to stran in poskusi znova.':'Mikrofona ni bilo mogoče vklopiti ('+(e&&e.name||'napaka')+').';msg.hidden=false;return}
+  ac=new(window.AudioContext||window.webkitAudioContext)();if(ac.resume)await ac.resume();
+  an=ac.createAnalyser();an.fftSize=2048;ac.createMediaStreamSource(stream).connect(an);buf=new Float32Array(an.fftSize);
+  running=true;$('micBtn').setAttribute('aria-pressed','true');$('micBtn').setAttribute('aria-label','Izklopi mikrofon');$('centsEl').textContent='Poslušam …';
+  raf=requestAnimationFrame(loop);
+}
+function stopMic(){running=false;cancelAnimationFrame(raf);if(stream)stream.getTracks().forEach(t=>t.stop());if(ac)ac.close();ac=null;stream=null;
+  $('micBtn').setAttribute('aria-pressed','false');$('micBtn').setAttribute('aria-label','Vklopi mikrofon');recent=[];idle();$('centsEl').textContent='Pritisni mikrofon in zapoj';draw()}
+
+/* ---------- graph ---------- */
+const cv=$('cv');
+function draw(){
+  const W=cv.clientWidth,H=cv.clientHeight;if(!W||!H)return;const d=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(W*d)||cv.height!==Math.round(H*d)){cv.width=Math.round(W*d);cv.height=Math.round(H*d)}
+  const g=cv.getContext('2d');g.setTransform(d,0,0,d,0,0);g.clearRect(0,0,W,H);
+  const now=performance.now();while(trace.length&&now-trace[0].t>WIN)trace.shift();
+  const rec=trace.filter(p=>now-p.t<2500);
+  const target=rec.length?rec.reduce((a,p)=>a+p.m,0)/rec.length:(saved?(saved.lo+saved.hi)/2:57);
+  viewC+=(target-viewC)*(running?.06:1);
+  const span=H<110?14:18,lo=viewC-span/2,rh=H/span,Y=m=>H-(m-lo)*rh,LW=42;
+  const cp=chordPcsNow(),kp=keyPcsNow(),kf=keyFlat(),tonic=mod12(curKey().pc+tr());
+  g.font='600 11px "IBM Plex Mono",monospace';g.textBaseline='middle';let lastY=1e9;
+  for(let n=Math.ceil(lo+span)+1;n>=Math.floor(lo)-1;n--){
+    const y=Y(n),pc=mod12(n),inC=cp&&cp.includes(pc);
+    if(inC){g.fillStyle='rgba(47,191,113,.24)';g.fillRect(LW,y-rh/2,W-LW,rh)}
+    else if(kp.includes(pc)){g.fillStyle='rgba(255,255,255,.055)';g.fillRect(LW,y-rh/2,W-LW,rh)}
+    const lab=cp?inC:pc===tonic;
+    if(lab&&Math.abs(lastY-y)>=12&&y>6&&y<H-6){g.fillStyle=inC?'#8fe3b4':'rgba(247,238,250,.6)';g.fillText(noteName(n,kf),6,y);lastY=y}
+  }
+  g.fillStyle='rgba(255,255,255,.08)';g.fillRect(LW-1,0,1,H);
+  if(saved){g.strokeStyle='rgba(255,122,92,.7)';g.setLineDash([4,4]);g.lineWidth=1;
+    for(const yy of[Y(saved.lo)+rh/2,Y(saved.hi)-rh/2]){g.beginPath();g.moveTo(LW,yy);g.lineTo(W,yy);g.stroke()}g.setLineDash([])}
+  g.lineWidth=3;g.lineCap='round';let prev=null;
+  for(const p of trace){const x=LW+(1-(now-p.t)/WIN)*(W-LW),y=Y(p.m);
+    if(prev&&p.t-prev.t<150){g.strokeStyle=COL[p.fit];g.beginPath();g.moveTo(prev.x,prev.y);g.lineTo(x,y);g.stroke()}prev={x,y,t:p.t,f:p.fit}}
+  if(prev&&now-prev.t<300){g.fillStyle=COL[prev.f];g.beginPath();g.arc(prev.x,prev.y,5,0,7);g.fill()}
+}
+const ro=new ResizeObserver(()=>{document.documentElement.style.setProperty('--stageH',$('stage').offsetHeight+'px');draw()});ro.observe($('stage'));
+
+/* ---------- stats & range ---------- */
+const pct=(a,b)=>b?Math.round(a/b*100):null;
+function showStats(){
+  const kf=keyFlat(),rows=[['Čisto zapetih',pct(st.tune,st.n),'var(--ch)'],['V tonaliteti',pct(st.key,st.n),'var(--key)'],['V akordu',pct(st.ch,st.chN),'var(--ch)']];
+  $('stats').innerHTML=rows.map(([l,v,c])=>`<div class="stat"><b>${v==null?'—':v+' %'}</b><span>${l}</span><div class="bar"><i style="width:${v||0}%;background:${c}"></i></div></div>`).join('')+
+    `<div class="stat"><b>${st.lo==null?'—':noteName(st.lo,kf)+'–'+noteName(st.hi,kf)}</b><span>Razpon v tej vaji</span></div>`;
+}
+function voiceType(lo,hi){const m=(lo+hi)/2;return m<54.5?'bas':m<58.5?'bariton':m<63?'tenor':'zelo visok moški glas'}
+function showRange(){
+  $('rSaved').textContent=saved?noteName(saved.lo)+' – '+noteName(saved.hi):'—';
+  $('rType').textContent=saved?`groba ocena za moški glas: ${voiceType(saved.lo,saved.hi)}`:'';
+  $('rLive').textContent=rng.lo==null?'—':noteName(rng.lo)+' – '+noteName(rng.hi);
+  $('rSave').disabled=rng.lo==null||rng.hi-rng.lo<3;
+}
+
+/* ---------- tone ---------- */
+let toneCtx=null;
+function playChord(){
+  try{toneCtx=toneCtx||new(window.AudioContext||window.webkitAudioContext)();if(toneCtx.resume)toneCtx.resume()}catch(e){return}
+  const info=active>=0?flat[active]:null,pcs=info?info.pcs.map(p=>mod12(p+tr())):[mod12(curKey().pc+tr())],t0=toneCtx.currentTime;
+  const root=info?mod12(info.root+tr()):pcs[0];
+  [root,...pcs.filter(p=>p!==root)].forEach((pc,i)=>{let m=48+pc;if(i>0&&m<48+root)m+=12;
+    const o=toneCtx.createOscillator(),gn=toneCtx.createGain();o.type='triangle';o.frequency.value=440*2**((m-69)/12);
+    const s=t0+i*.07;gn.gain.setValueAtTime(0,s);gn.gain.linearRampToValueAtTime(.16,s+.03);gn.gain.exponentialRampToValueAtTime(.001,s+1.6);
+    o.connect(gn);gn.connect(toneCtx.destination);o.start(s);o.stop(s+1.7)});
+}
+
+/* ---------- autoscroll ---------- */
+let scrolling=false,accS=0,lastS=0;
+function scrollLoop(ts){if(!scrolling)return;if(lastS){accS+=(ts-lastS)/1000*(+$('speed').value)*9;const px=Math.floor(accS);if(px){window.scrollBy(0,px);accS-=px}}lastS=ts;
+  if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-2){setScroll(false);return}requestAnimationFrame(scrollLoop)}
+function setScroll(on){scrolling=on;lastS=0;accS=0;$('scrollBtn').textContent=on?'Pomikanje ❚❚':'Pomikanje ▶';if(on)requestAnimationFrame(scrollLoop)}
+
+/* ---------- editor ---------- */
+let editingId=null,delArm=0;
+function openEditor(isNew){editingId=isNew?null:song.id;$('edHead').textContent=isNew?'Nova pesem':'Uredi pesem';
+  $('edTitle').value=isNew?'':song.title;$('edText').value=isNew?'':song.text;$('songView').hidden=true;$('editor').hidden=false;setScroll(false);$('edTitle').focus()}
+function closeEditor(){$('editor').hidden=true;$('songView').hidden=false}
+
+/* ---------- events ---------- */
+$('micBtn').addEventListener('click',()=>running?stopMic():startMic());
+$('sheet').addEventListener('click',e=>{const b=e.target.closest('.ch');if(!b)return;const i=+b.dataset.i;active=active===i?-1:i;markActive(false)});
+$('prevCh').addEventListener('click',()=>step(-1));$('nextCh').addEventListener('click',()=>step(1));
+document.addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==='ArrowRight'){e.preventDefault();step(1)}else if(e.key==='ArrowLeft'){e.preventDefault();step(-1)}});
+$('playCh').addEventListener('click',playChord);
+$('graphBtn').addEventListener('click',()=>{const s=$('stage'),off=s.classList.toggle('nograph');$('graphBtn').setAttribute('aria-pressed',String(!off));draw()});
+$('songSel').addEventListener('change',e=>{song=songs.find(s=>s.id===e.target.value)||songs[0];saveSongs();loadSong();window.scrollTo(0,0)});
+$('keySel').addEventListener('change',e=>{song.key=e.target.value;saveSongs();render()});
+$('trDown').addEventListener('click',()=>{song.tr=tr()-1;if(song.tr<-11)song.tr=-11;saveSongs();render()});
+$('trUp').addEventListener('click',()=>{song.tr=tr()+1;if(song.tr>11)song.tr=11;saveSongs();render()});
+$('scrollBtn').addEventListener('click',()=>setScroll(!scrolling));
+$('newBtn').addEventListener('click',()=>openEditor(true));$('editBtn').addEventListener('click',()=>openEditor(false));
+$('edCancel').addEventListener('click',closeEditor);
+$('edSave').addEventListener('click',()=>{const title=$('edTitle').value.trim()||'Brez naslova',text=$('edText').value;
+  if(editingId==null){song={id:Date.now().toString(36),title,text,key:'auto',tr:0};songs.push(song)}else{song.title=title;song.text=text}
+  saveSongs();closeEditor();loadSong();window.scrollTo(0,0)});
+$('delBtn').addEventListener('click',()=>{const b=$('delBtn');
+  if(Date.now()-delArm>3000){delArm=Date.now();b.textContent='Res izbrišem?';setTimeout(()=>{b.textContent='Izbriši'},3000);return}
+  songs=songs.filter(s=>s!==song);if(!songs.length)songs=[SAMPLE];song=songs[0];delArm=0;b.textContent='Izbriši';saveSongs();loadSong()});
+$('resetSt').addEventListener('click',()=>{st={n:0,tune:0,key:0,chN:0,ch:0,lo:null,hi:null};showStats()});
+$('rToggle').addEventListener('click',()=>{rng.on=!rng.on;if(rng.on){rng.lo=rng.hi=null;if(!running)startMic()}$('rToggle').textContent=rng.on?'Ustavi merjenje':'Začni merjenje';showRange()});
+$('rSave').addEventListener('click',()=>{saved={lo:rng.lo,hi:rng.hi};store.set('range',saved);rng.on=false;$('rToggle').textContent='Začni merjenje';showRange();draw()});
+$('setNot').value=settings.notation;$('setGate').value=String(settings.gate);$('setTol').value=String(settings.tol);
+$('setNot').addEventListener('change',e=>{settings.notation=e.target.value;store.set('settings',settings);loadSong();showStats();showRange()});
+$('setGate').addEventListener('change',e=>{settings.gate=+e.target.value;store.set('settings',settings)});
+$('setTol').addEventListener('change',e=>{settings.tol=+e.target.value;store.set('settings',settings)});
+
+loadSong();showStats();showRange();idle();
+window.__pv={detect,parseSong,chordInfo,detectKey};
+}
+</script>
+</body>
+</html>
