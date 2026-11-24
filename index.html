@@ -255,13 +255,13 @@ const MAJ=[0,2,4,5,7,9,11];
 function detectKey(infos){
   if(!infos.length)return{pc:7,minor:false};let best=null;const f=infos[0],l=infos[infos.length-1];
   for(let k=0;k<12;k++){const sc=new Set(MAJ.map(i=>(k+i)%12));let s=0;
-    for(const c of infos){s+=c.pcs.filter(p=>sc.has(p)).length/c.pcs.length;if(c.root===k&&!c.minor)s+=.4}
+    for(const c of infos){s+=c.pcs.filter(p=>sc.has(p)).length/c.pcs.length;if(c.root===k&&!c.minor)s+=.15}
     const tonicOf=c=>c.minor?mod12(c.root+3):c.root;
-    if(tonicOf(f)===k)s+=1.5;if(tonicOf(l)===k)s+=1.5;if(!best||s>best.s)best={s,k}}
+    if(tonicOf(f)===k)s+=3;if(tonicOf(l)===k)s+=1;if(!best||s>best.s)best={s,k}}
   const rel=(best.k+9)%12,minor=(f.minor&&f.root===rel)||(l.minor&&l.root===rel&&f.root!==best.k);
   return minor?{pc:rel,minor:true}:{pc:best.k,minor:false};
 }
-const scalePcs=k=>{const t=k.minor?mod12(k.pc+3):k.pc;const s=MAJ.map(i=>mod12(t+i));if(k.minor)s.push(mod12(k.pc+11));return s};
+const scalePcs=k=>{const t=k.minor?mod12(k.pc+3):k.pc;const s=MAJ.map(i=>mod12(t+i));if(k.minor)s.push(mod12(k.pc+11),mod12(k.pc+9));return s};
 const keyLabel=(k,flat)=>{const n=pcName(k.pc,flat);return k.minor?n.toLowerCase()+'-mol':n+'-dur'};
 
 /* ---------- songs ---------- */
